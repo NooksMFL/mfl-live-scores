@@ -130,6 +130,35 @@ def score(match, side):
         return value
 
 
+def unwrap_match_payload(payload):
+    if isinstance(payload, dict):
+        for key in ("data", "match", "result"):
+            value = payload.get(key)
+            if isinstance(value, dict):
+                return value
+    return payload if isinstance(payload, dict) else {}
+
+
+def score_paths(obj):
+    found = {}
+    def walk(x, path=""):
+        if isinstance(x, dict):
+            for k, v in x.items():
+                p = f"{path}.{k}" if path else str(k)
+                lk = str(k).lower()
+                if any(word in lk for word in ("score", "goal", "result")):
+                    if isinstance(v, (str, int, float, bool)) or v is None:
+                        found[p] = v
+                    elif isinstance(v, dict):
+                        found[p] = v
+                walk(v, p)
+        elif isinstance(x, list):
+            for i, v in enumerate(x):
+                walk(v, f"{path}[{i}]")
+    walk(obj)
+    return found
+
+
 def normalise(match):
     return {
         "id": nested(match, "id", "matchId"),
@@ -266,10 +295,36 @@ def get_scores(wallet):
             mid = m.get("id") or m.get("matchId") or repr(m)[:120]
             collected[str(mid)] = m
 
-    rows = [normalise(x) for x in collected.values()]
+    # For live verified matches, ask MFL for the individual match record too.
+    # The global feed can lag behind the match page's live score.
+    detailed = {}
+    detail_debug = []
+    for key, m in collected.items():
+        chosen = m
+        status = str(m.get("status") or m.get("matchStatus") or m.get("state") or "").upper()
+        mid = m.get("id") or m.get("matchId")
+        if mid is not None and status in ("LIVE", "IN_PROGRESS", "STARTED"):
+            try:
+                payload = api_get(f"/matches/{mid}", token, timeout=15)
+                detail = unwrap_match_payload(payload)
+                if detail:
+                    chosen = detail
+                detail_debug.append({
+                    "match_id": mid,
+                    "detail_endpoint": "ok",
+                    "detail_score_fields": score_paths(detail),
+                })
+            except Exception as exc:
+                detail_debug.append({
+                    "match_id": mid,
+                    "detail_endpoint": str(exc),
+                })
+        detailed[key] = chosen
+
+    rows = [normalise(x) for x in detailed.values()]
 
     score_debug = []
-    for m in collected.values():
+    for m in detailed.values():
         if not isinstance(m, dict):
             continue
         scoreish = {}
@@ -286,11 +341,12 @@ def get_scores(wallet):
             "away": team(m, "away"),
             "status": m.get("status") or m.get("matchStatus") or m.get("state"),
             "score_fields": scoreish,
+            "all_score_goal_result_paths": score_paths(m),
         })
 
     # Keep newest/current-looking records near the top.
     rows.sort(key=lambda x: str(x.get("start") or ""), reverse=True)
-    return clubs, rows, request_debug, score_debug
+    return clubs, rows, request_debug, score_debug, detail_debug
 
 
 st.markdown("""
@@ -331,7 +387,7 @@ if not wallet:
 @st.fragment(run_every="10s")
 def live_scores_panel():
     try:
-        clubs, matches, request_debug, score_debug = get_scores(wallet)
+        clubs, matches, request_debug, score_debug, detail_debug = get_scores(wallet)
 
         st.markdown(
             f'<span class="live">UPDATED {datetime.now(timezone.utc).strftime("%H:%M:%S UTC")}</span>',
@@ -417,6 +473,9 @@ def live_scores_panel():
                 if score_debug:
                     st.markdown("**Verified match score fields**")
                     st.json(score_debug)
+                if detail_debug:
+                    st.markdown("**Live match detail endpoint**")
+                    st.json(detail_debug)
                 st.markdown("**Club match counts**")
                 st.json(request_debug)
 
