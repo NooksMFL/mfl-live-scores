@@ -268,9 +268,29 @@ def get_scores(wallet):
 
     rows = [normalise(x) for x in collected.values()]
 
+    score_debug = []
+    for m in collected.values():
+        if not isinstance(m, dict):
+            continue
+        scoreish = {}
+        for k, v in m.items():
+            lk = str(k).lower()
+            if any(word in lk for word in ("score", "goal", "result", "home", "away")):
+                if isinstance(v, (str, int, float, bool)) or v is None:
+                    scoreish[k] = v
+                elif isinstance(v, dict):
+                    scoreish[k] = v
+        score_debug.append({
+            "id": m.get("id") or m.get("matchId"),
+            "home": team(m, "home"),
+            "away": team(m, "away"),
+            "status": m.get("status") or m.get("matchStatus") or m.get("state"),
+            "score_fields": scoreish,
+        })
+
     # Keep newest/current-looking records near the top.
     rows.sort(key=lambda x: str(x.get("start") or ""), reverse=True)
-    return clubs, rows, request_debug
+    return clubs, rows, request_debug, score_debug
 
 
 st.markdown("""
@@ -311,7 +331,7 @@ if not wallet:
 @st.fragment(run_every="10s")
 def live_scores_panel():
     try:
-        clubs, matches, request_debug = get_scores(wallet)
+        clubs, matches, request_debug, score_debug = get_scores(wallet)
 
         st.markdown(
             f'<span class="live">UPDATED {datetime.now(timezone.utc).strftime("%H:%M:%S UTC")}</span>',
@@ -386,8 +406,11 @@ def live_scores_panel():
                     st.markdown(card_html, unsafe_allow_html=True)
 
             with st.expander("Club feed diagnostic"):
-                st.caption("Shows only club IDs/names and match counts. No token is displayed.")
+                st.caption("Shows club IDs/names, match counts, and safe score-related fields. No token is displayed.")
                 st.json(request_debug)
+                if score_debug:
+                    st.markdown("**Verified match score fields**")
+                    st.json(score_debug)
 
     except Exception as e:
         st.error(f"MFL error: {e}")
