@@ -303,47 +303,49 @@ if not wallet:
     st.info("Enter your MFL owner wallet address above so I can identify your clubs.")
     st.stop()
 
-try:
-    clubs, matches, request_debug = get_scores(wallet)
+@st.fragment(run_every="10s")
+def live_scores_panel():
+    try:
+        clubs, matches, request_debug = get_scores(wallet)
 
-    st.markdown(
-        f'<span class="live">UPDATED {datetime.now(timezone.utc).strftime("%H:%M:%S UTC")}</span>',
-        unsafe_allow_html=True,
-    )
-
-    if not clubs:
-        st.warning("MFL authenticated, but no MFL_OWNER clubs were found for that wallet.")
-    else:
-        st.caption(f"Tracking {len(clubs)} owned clubs")
         st.markdown(
-            "".join(f'<span class="clubpill">{c["name"]}</span>' for c in clubs),
+            f'<span class="live">UPDATED {datetime.now(timezone.utc).strftime("%H:%M:%S UTC")}</span>',
             unsafe_allow_html=True,
         )
 
-        if not matches:
-            st.info("Your 12 clubs were found correctly. MFL's current match feed does not contain a verified match for any of them yet.")
+        if not clubs:
+            st.warning("MFL authenticated, but no MFL_OWNER clubs were found for that wallet.")
         else:
-            for m in matches:
-                hs = "–" if m["home_score"] is None else m["home_score"]
-                aws = "–" if m["away_score"] is None else m["away_score"]
-                minute = f' · {m["minute"]}' if m["minute"] else ""
-                comp = f' · {m["type"]}' if m["type"] else ""
-                start = f' · {m["start"]}' if m["start"] else ""
-                st.markdown(
-                    f'''<div class="card">
-                    <div class="row"><span>{m["home"]}</span><span>{hs}</span></div>
-                    <div class="row"><span>{m["away"]}</span><span>{aws}</span></div>
-                    <div class="meta">{m["status"]}{minute}{comp}{start}</div>
-                    </div>''',
-                    unsafe_allow_html=True,
-                )
+            st.caption(f"Tracking {len(clubs)} owned clubs")
+            st.markdown(
+                "".join(f'<span class="clubpill">{c["name"]}</span>' for c in clubs),
+                unsafe_allow_html=True,
+            )
 
-        with st.expander("Club feed diagnostic"):
-            st.caption("Shows only club IDs/names and match counts. No token is displayed.")
-            st.json(request_debug)
+            if not matches:
+                st.info(f"Your {len(clubs)} clubs were found correctly. MFL's current match feed does not contain a verified match for any of them yet.")
+            else:
+                for m in matches:
+                    hs = "–" if m["home_score"] is None else m["home_score"]
+                    aws = "–" if m["away_score"] is None else m["away_score"]
+                    minute = f' · {m["minute"]}' if m["minute"] else ""
+                    comp = f' · {m["type"]}' if m["type"] else ""
+                    start = f' · {m["start"]}' if m["start"] else ""
+                    st.markdown(
+                        f'''<div class="card">
+                        <div class="row"><span>{m["home"]}</span><span>{hs}</span></div>
+                        <div class="row"><span>{m["away"]}</span><span>{aws}</span></div>
+                        <div class="meta">{m["status"]}{minute}{comp}{start}</div>
+                        </div>''',
+                        unsafe_allow_html=True,
+                    )
 
-except Exception as e:
-    st.error(f"MFL error: {e}")
+            with st.expander("Club feed diagnostic"):
+                st.caption("Shows only club IDs/names and match counts. No token is displayed.")
+                st.json(request_debug)
 
-time.sleep(10)
-st.rerun()
+    except Exception as e:
+        st.error(f"MFL error: {e}")
+
+live_scores_panel()
+
