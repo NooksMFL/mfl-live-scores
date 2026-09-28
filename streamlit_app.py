@@ -334,27 +334,42 @@ def get_scores(wallet):
             except Exception as exc:
                 detail_status = str(exc)
 
-            # Probe possible live sources regardless of whether /matches/{id} exists.
+            # Stay on the confirmed /matches/feed route and test match-specific
+            # parameter shapes. MFL may serve a fresher payload when a match ID
+            # is supplied even though the broad feed snapshot lags behind.
             live_probe = []
-            for probe_path in (
-                f"/matches/{mid}/events",
-                f"/matches/{mid}/timeline",
-                f"/matches/{mid}/feed",
-                f"/matches/{mid}/stats",
-            ):
+            feed_tests = [
+                {"matchId": mid, "limit": 25},
+                {"id": mid, "limit": 25},
+                {"matchIds": str(mid), "limit": 25},
+                {"status": "LIVE", "matchId": mid, "limit": 25},
+                {"status": "LIVE", "limit": 250},
+            ]
+            for params in feed_tests:
                 try:
-                    probe_payload = api_get(probe_path, token, timeout=10)
+                    probe_payload = api_get("/matches/feed", token, params=params, timeout=10)
                     probe_rows = arr(probe_payload)
+                    exact = []
+                    for item in probe_rows:
+                        if not isinstance(item, dict):
+                            continue
+                        item_id = item.get("id") or item.get("matchId")
+                        if str(item_id) == str(mid):
+                            exact.append({
+                                "normalised": normalise(item),
+                                "score_fields": score_paths(item),
+                            })
                     live_probe.append({
-                        "path": probe_path,
+                        "path": "/matches/feed",
+                        "params": params,
                         "ok": True,
                         "count": len(probe_rows),
-                        "score_fields": score_paths(probe_payload),
-                        "events": event_summary(probe_payload)[:12],
+                        "exact_match": exact,
                     })
                 except Exception as probe_exc:
                     live_probe.append({
-                        "path": probe_path,
+                        "path": "/matches/feed",
+                        "params": params,
                         "ok": False,
                         "error": str(probe_exc),
                     })
