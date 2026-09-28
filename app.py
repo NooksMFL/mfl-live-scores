@@ -21,11 +21,16 @@ TRACKED_CLUBS = [
     if x.strip()
 ]
 
+# Match the proven browser-style headers from the existing Nooks MFL apps.
 HEADERS = {
     "Accept": "*/*",
     "Origin": "https://app.playmfl.com",
     "Referer": "https://app.playmfl.com/",
-    "User-Agent": "MFL-Live-Scores/1.0",
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/152.0.0.0 Safari/537.36 Edg/152.0.0.0"
+    ),
 }
 
 app = Flask(__name__)
@@ -53,7 +58,12 @@ def _access_token():
                 last = f"HTTP {r.status_code}: {r.text[:200]}"
                 time.sleep(min(8, 1.5 * (2 ** attempt)))
                 continue
-            r.raise_for_status()
+            if not r.ok:
+                body = r.text[:300].strip().replace("\n", " ")
+                raise RuntimeError(
+                    f"MFL refresh returned HTTP {r.status_code}"
+                    + (f": {body}" if body else "")
+                )
             data = r.json()
             access = data.get("access")
             if not access and isinstance(data.get("data"), dict):
