@@ -1,3 +1,4 @@
+streamlit==1.49.1
+requests==2.32.5
 Flask==3.1.2
 gunicorn==23.0.0
-requests==2.32.5
