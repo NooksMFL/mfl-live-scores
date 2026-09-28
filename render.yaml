@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: mfl-live-scores
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    healthCheckPath: /health
+    envVars:
+      - key: MFL_REFRESH_TOKEN
+        sync: false
