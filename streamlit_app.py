@@ -322,46 +322,49 @@ def get_scores(wallet):
         status = str(m.get("status") or m.get("matchStatus") or m.get("state") or "").upper()
         mid = m.get("id") or m.get("matchId")
         if mid is not None and status in ("LIVE", "IN_PROGRESS", "STARTED"):
+            detail_status = None
+            detail_fields = {}
             try:
                 payload = api_get(f"/matches/{mid}", token, timeout=15)
                 detail = unwrap_match_payload(payload)
                 if detail:
                     chosen = detail
-                live_probe = []
-                for probe_path in (
-                    f"/matches/{mid}/events",
-                    f"/matches/{mid}/timeline",
-                    f"/matches/{mid}/feed",
-                    f"/matches/{mid}/stats",
-                ):
-                    try:
-                        probe_payload = api_get(probe_path, token, timeout=10)
-                        probe_rows = arr(probe_payload)
-                        live_probe.append({
-                            "path": probe_path,
-                            "ok": True,
-                            "count": len(probe_rows),
-                            "score_fields": score_paths(probe_payload),
-                            "events": event_summary(probe_payload)[:12],
-                        })
-                    except Exception as probe_exc:
-                        live_probe.append({
-                            "path": probe_path,
-                            "ok": False,
-                            "error": str(probe_exc),
-                        })
-
-                detail_debug.append({
-                    "match_id": mid,
-                    "detail_endpoint": "ok",
-                    "detail_score_fields": score_paths(detail),
-                    "live_probe": live_probe,
-                })
+                detail_status = "ok"
+                detail_fields = score_paths(detail)
             except Exception as exc:
-                detail_debug.append({
-                    "match_id": mid,
-                    "detail_endpoint": str(exc),
-                })
+                detail_status = str(exc)
+
+            # Probe possible live sources regardless of whether /matches/{id} exists.
+            live_probe = []
+            for probe_path in (
+                f"/matches/{mid}/events",
+                f"/matches/{mid}/timeline",
+                f"/matches/{mid}/feed",
+                f"/matches/{mid}/stats",
+            ):
+                try:
+                    probe_payload = api_get(probe_path, token, timeout=10)
+                    probe_rows = arr(probe_payload)
+                    live_probe.append({
+                        "path": probe_path,
+                        "ok": True,
+                        "count": len(probe_rows),
+                        "score_fields": score_paths(probe_payload),
+                        "events": event_summary(probe_payload)[:12],
+                    })
+                except Exception as probe_exc:
+                    live_probe.append({
+                        "path": probe_path,
+                        "ok": False,
+                        "error": str(probe_exc),
+                    })
+
+            detail_debug.append({
+                "match_id": mid,
+                "detail_endpoint": detail_status,
+                "detail_score_fields": detail_fields,
+                "live_probe": live_probe,
+            })
         detailed[key] = chosen
 
     rows = [normalise(x) for x in detailed.values()]
