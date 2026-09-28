@@ -280,8 +280,13 @@ st.markdown("""
 .title{font-size:2.2rem;font-weight:900}
 .sub{color:#789198;margin-top:-8px;margin-bottom:20px}
 .card{background:#0a1b22;border:1px solid #173943;border-radius:14px;padding:18px;margin-bottom:12px}
-.row{display:flex;justify-content:space-between;font-size:1.15rem;font-weight:800}
-.meta{color:#789198;font-size:.8rem;margin-top:10px}
+.scoreline{display:flex;align-items:center;justify-content:space-between;gap:14px;font-size:1.18rem;font-weight:900}
+.scoreline .fixture{min-width:0}
+.scoreline .score{white-space:nowrap;font-size:1.35rem}
+.meta{display:flex;align-items:center;gap:8px;color:#789198;font-size:.8rem;margin-top:10px;flex-wrap:wrap}
+.status-live{display:inline-block;background:#0b3a2f;color:#23e6b7;border:1px solid #1d6a58;padding:4px 7px;border-radius:999px;font-size:.68rem;font-weight:900}
+.status-ended{display:inline-block;background:#15222a;color:#9caeb2;border:1px solid #29404a;padding:4px 7px;border-radius:999px;font-size:.68rem;font-weight:900}
+.status-other{display:inline-block;background:#13283a;color:#83c9ff;border:1px solid #254d6b;padding:4px 7px;border-radius:999px;font-size:.68rem;font-weight:900}
 .live{display:inline-block;background:#0c2c28;color:#20dfb5;padding:5px 9px;border-radius:999px;font-size:.72rem;font-weight:800}
 .clubpill{display:inline-block;background:#0b2028;border:1px solid #173943;border-radius:999px;padding:5px 9px;margin:3px;color:#a8b8bc;font-size:.7rem}
 </style>
@@ -325,17 +330,54 @@ def live_scores_panel():
             if not matches:
                 st.info(f"Your {len(clubs)} clubs were found correctly. MFL's current match feed does not contain a verified match for any of them yet.")
             else:
+                status_rank = {
+                    "LIVE": 0,
+                    "IN_PROGRESS": 0,
+                    "STARTED": 0,
+                    "SCHEDULED": 1,
+                    "CREATED": 1,
+                    "UPCOMING": 1,
+                    "ENDED": 2,
+                    "FINISHED": 2,
+                    "FT": 2,
+                }
+                matches = sorted(
+                    matches,
+                    key=lambda m: (
+                        status_rank.get(str(m.get("status") or "").upper(), 1),
+                        str(m.get("start") or ""),
+                    ),
+                )
+
                 for m in matches:
                     hs = "–" if m["home_score"] is None else m["home_score"]
                     aws = "–" if m["away_score"] is None else m["away_score"]
-                    minute = f' · {m["minute"]}' if m["minute"] else ""
-                    comp = f' · {m["type"]}' if m["type"] else ""
-                    start = f' · {m["start"]}' if m["start"] else ""
+                    status = str(m.get("status") or "UNKNOWN").upper()
+
+                    if status in ("LIVE", "IN_PROGRESS", "STARTED"):
+                        status_class = "status-live"
+                        status_label = "LIVE"
+                    elif status in ("ENDED", "FINISHED", "FT"):
+                        status_class = "status-ended"
+                        status_label = "FT"
+                    else:
+                        status_class = "status-other"
+                        status_label = status
+
+                    minute = f'<span>{m["minute"]}</span>' if m["minute"] else ""
+                    comp = f'<span>{m["type"]}</span>' if m["type"] else ""
+
                     st.markdown(
                         f'''<div class="card">
-                        <div class="row"><span>{m["home"]}</span><span>{hs}</span></div>
-                        <div class="row"><span>{m["away"]}</span><span>{aws}</span></div>
-                        <div class="meta">{m["status"]}{minute}{comp}{start}</div>
+                        <div class="scoreline">
+                          <span class="fixture">{m["home"]} vs {m["away"]}</span>
+                          <span class="score">{hs}–{aws}</span>
+                        </div>
+                        <div class="meta">
+                          <span class="{status_class}">{status_label}</span>
+                          {minute}
+                          {comp}
+                        </div>
                         </div>''',
                         unsafe_allow_html=True,
                     )
