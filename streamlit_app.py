@@ -206,22 +206,37 @@ def get_scores(wallet):
     collected = {}
     request_debug = []
 
-    # First ask MFL specifically for each owned club. This is much more reliable
-    # than assuming the current global match feed happens to contain our fixtures.
+    # MFL currently appears to ignore clubId on /matches/feed in some sessions,
+    # so never trust the query filter by itself. Verify every returned match
+    # against the requested owned club before displaying it.
     for club in clubs:
         params = {"clubId": club["id"], "limit": 50}
+        matched = 0
         try:
             raw = arr(api_get("/matches/feed", token, params=params, timeout=20))
+            for m in raw:
+                if not isinstance(m, dict):
+                    continue
+                row = normalise(m)
+                home_id = club_id_from_match(m, "home")
+                away_id = club_id_from_match(m, "away")
+                club_name = club["name"].casefold()
+                name_hit = (
+                    club_name in row["home"].casefold()
+                    or club_name in row["away"].casefold()
+                )
+                id_hit = home_id == club["id"] or away_id == club["id"]
+                if not (name_hit or id_hit):
+                    continue
+                mid = m.get("id") or m.get("matchId") or repr(m)[:120]
+                collected[str(mid)] = m
+                matched += 1
             request_debug.append({
                 "club": club["name"],
                 "club_id": club["id"],
                 "returned": len(raw),
+                "verified_matches": matched,
             })
-            for m in raw:
-                if not isinstance(m, dict):
-                    continue
-                mid = m.get("id") or m.get("matchId") or repr(m)[:120]
-                collected[str(mid)] = m
         except Exception as exc:
             request_debug.append({
                 "club": club["name"],
@@ -306,7 +321,7 @@ try:
         )
 
         if not matches:
-            st.info("Your clubs were found, but MFL did not return any matches for them yet.")
+            st.info("Your 12 clubs were found correctly. MFL's current match feed does not contain a verified match for any of them yet.")
         else:
             for m in matches:
                 hs = "–" if m["home_score"] is None else m["home_score"]
