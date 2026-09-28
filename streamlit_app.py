@@ -159,6 +159,24 @@ def score_paths(obj):
     return found
 
 
+def event_summary(payload):
+    rows = arr(payload)
+    summary = []
+    for e in rows[:30]:
+        if not isinstance(e, dict):
+            continue
+        compact = {}
+        for k, v in e.items():
+            lk = str(k).lower()
+            if any(w in lk for w in ("type", "event", "goal", "score", "minute", "time", "team", "club", "squad", "side")):
+                if isinstance(v, (str, int, float, bool)) or v is None:
+                    compact[k] = v
+                elif isinstance(v, dict):
+                    compact[k] = v
+        summary.append(compact)
+    return summary
+
+
 def normalise(match):
     return {
         "id": nested(match, "id", "matchId"),
@@ -309,10 +327,35 @@ def get_scores(wallet):
                 detail = unwrap_match_payload(payload)
                 if detail:
                     chosen = detail
+                live_probe = []
+                for probe_path in (
+                    f"/matches/{mid}/events",
+                    f"/matches/{mid}/timeline",
+                    f"/matches/{mid}/feed",
+                    f"/matches/{mid}/stats",
+                ):
+                    try:
+                        probe_payload = api_get(probe_path, token, timeout=10)
+                        probe_rows = arr(probe_payload)
+                        live_probe.append({
+                            "path": probe_path,
+                            "ok": True,
+                            "count": len(probe_rows),
+                            "score_fields": score_paths(probe_payload),
+                            "events": event_summary(probe_payload)[:12],
+                        })
+                    except Exception as probe_exc:
+                        live_probe.append({
+                            "path": probe_path,
+                            "ok": False,
+                            "error": str(probe_exc),
+                        })
+
                 detail_debug.append({
                     "match_id": mid,
                     "detail_endpoint": "ok",
                     "detail_score_fields": score_paths(detail),
+                    "live_probe": live_probe,
                 })
             except Exception as exc:
                 detail_debug.append({
@@ -460,6 +503,14 @@ def live_scores_panel():
                         f'</div>'
                     )
                     st.markdown(card_html, unsafe_allow_html=True)
+
+                    if status in ("LIVE", "IN_PROGRESS", "STARTED"):
+                        for dbg in detail_debug:
+                            if str(dbg.get("match_id")) == str(m.get("id")):
+                                with st.expander("Temporary live-score source check"):
+                                    st.caption("Checks MFL live event/timeline routes for this match. No token is shown.")
+                                    st.json(dbg)
+                                break
 
 
 
