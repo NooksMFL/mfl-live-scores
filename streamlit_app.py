@@ -367,20 +367,23 @@ def live_scores_panel():
                     minute = f'<span>{m["minute"]}</span>' if m["minute"] else ""
                     comp = f'<span>{m["type"]}</span>' if m["type"] else ""
 
-                    st.markdown(
-                        f'''<div class="card">
-                        <div class="scoreline">
-                          <span class="fixture">{m["home"]} vs {m["away"]}</span>
-                          <span class="score">{hs}–{aws}</span>
-                        </div>
-                        <div class="meta">
-                          <span class="{status_class}">{status_label}</span>
-                          {minute}
-                          {comp}
-                        </div>
-                        </div>''',
-                        unsafe_allow_html=True,
+                    meta_bits = [f'<span class="{status_class}">{status_label}</span>']
+                    if minute:
+                        meta_bits.append(minute)
+                    if comp:
+                        meta_bits.append(comp)
+                    meta_html = " ".join(meta_bits)
+
+                    card_html = (
+                        f'<div class="card">'
+                        f'<div class="scoreline">'
+                        f'<span class="fixture">{m["home"]} vs {m["away"]}</span>'
+                        f'<span class="score">{hs}–{aws}</span>'
+                        f'</div>'
+                        f'<div class="meta">{meta_html}</div>'
+                        f'</div>'
                     )
+                    st.markdown(card_html, unsafe_allow_html=True)
 
             with st.expander("Club feed diagnostic"):
                 st.caption("Shows only club IDs/names and match counts. No token is displayed.")
