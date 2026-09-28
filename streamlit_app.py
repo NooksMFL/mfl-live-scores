@@ -151,13 +151,31 @@ def get_scores():
         timeout=30,
     )
     r.raise_for_status()
-    rows = [normalise(x) for x in arr(r.json()) if isinstance(x, dict)]
+    raw = arr(r.json())
+    rows = [normalise(x) for x in raw if isinstance(x, dict)]
     out = []
     for row in rows:
         names = f'{row["home"]} {row["away"]}'.lower()
         if any(club.lower() in names for club in TRACKED_CLUBS):
             out.append(row)
-    return out
+
+    debug = []
+    for x in raw[:12]:
+        if not isinstance(x, dict):
+            continue
+        debug.append({
+            "id": x.get("id") or x.get("matchId"),
+            "status": x.get("status") or x.get("matchStatus") or x.get("state"),
+            "type": x.get("type") or x.get("competitionType"),
+            "homeTeamName": x.get("homeTeamName"),
+            "awayTeamName": x.get("awayTeamName"),
+            "homeSquad": x.get("homeSquad"),
+            "awaySquad": x.get("awaySquad"),
+            "homeClub": x.get("homeClub"),
+            "awayClub": x.get("awayClub"),
+            "keys": ", ".join(sorted(x.keys())),
+        })
+    return out, len(raw), rows[:20], debug
 
 
 st.markdown("""
@@ -177,11 +195,18 @@ st.markdown('<div class="title">MFL Live Scores</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub">Nooks network match feed · refreshes every 10 seconds</div>', unsafe_allow_html=True)
 
 try:
-    matches = get_scores()
+    matches, raw_count, sample_rows, debug_rows = get_scores()
     st.markdown(f'<span class="live">UPDATED {datetime.now(timezone.utc).strftime("%H:%M:%S UTC")}</span>', unsafe_allow_html=True)
 
     if not matches:
-        st.info("No tracked-club matches were returned by MFL.")
+        st.info(f"No tracked-club matches were recognised yet. MFL returned {raw_count} match record(s).")
+        if sample_rows:
+            st.caption("Normalised sample from MFL")
+            st.dataframe(sample_rows, use_container_width=True, hide_index=True)
+        if debug_rows:
+            with st.expander("MFL feed diagnostic"):
+                st.caption("Safe match-field diagnostic — no authentication token is shown.")
+                st.json(debug_rows)
     else:
         for m in matches:
             hs = "–" if m["home_score"] is None else m["home_score"]
