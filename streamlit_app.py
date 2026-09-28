@@ -461,23 +461,7 @@ def live_scores_panel():
                     )
                     st.markdown(card_html, unsafe_allow_html=True)
 
-                    if score_debug:
-                        for dbg in score_debug:
-                            if dbg.get("id") == m.get("id"):
-                                st.caption("Temporary live-score diagnostic")
-                                st.json(dbg.get("score_fields") or {})
-                                break
 
-            with st.expander("Club feed diagnostic"):
-                st.caption("Shows safe match/score fields and club match counts. No token is displayed.")
-                if score_debug:
-                    st.markdown("**Verified match score fields**")
-                    st.json(score_debug)
-                if detail_debug:
-                    st.markdown("**Live match detail endpoint**")
-                    st.json(detail_debug)
-                st.markdown("**Club match counts**")
-                st.json(request_debug)
 
     except Exception as e:
         st.error(f"MFL error: {e}")
